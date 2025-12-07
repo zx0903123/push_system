@@ -1,4 +1,4 @@
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 from enum import Enum
 
 
@@ -54,6 +54,9 @@ class Settings(BaseSettings):
 	說明: 包含應用名稱、DB/Redis 連線字串、推播服務設定等。
 	請複製 .env.example 為 .env 並填入實際的設定值。
 	"""
+
+	# Debug 模式
+	DEBUG: int = 0
 
 	# Supabase 設定
 	SUPABASE_URL: str
