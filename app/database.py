@@ -20,9 +20,8 @@ class Opreator(str, Enum):
     LESS_OR_EQUAL = "lte" # 小於等於
     LIKE = "like" # 區分大小寫
     ILIKE = "ilike" # 不區分大小寫
-    IS = "is_" # 等同Equal但可以用於Null值
-    NO_IS = "not_is_" # 等同NoEqual但可以用於Null值
-    IN = "in_" # 包含於列表中
+    IS = "is" # 等同Equal但可以用於Null值
+    IN = "in" # 包含於列表中
     OR = "or" # 或條件
 
 
