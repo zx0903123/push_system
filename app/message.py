@@ -3,7 +3,7 @@ from app.notification import NotificationHistory
 import app.notification as notification
 import app.database as db
 import app.settings as settings
-from app.settings import Channel, Status
+import app.constants as constants
 from typing import List, Optional
 import smtplib
 from email.mime.text import MIMEText
@@ -141,7 +141,7 @@ def send_email(to: List[str], subject: str, body: str, html: bool = False, attac
                 log_id=log_id,
                 message=f"Email 已發送！收件者: {', '.join(to)}",
                 recipient=", ".join(to),
-                status=Status.SUCCESS,
+                status=constants.STATUS_SUCCESS,
                 retry_count=retry_count
             )
             return True
@@ -193,7 +193,7 @@ def send_line(message: str, max_retries: int = 3, log_id: Optional[int] = None) 
                     log_id=log_id,
                     message="Line 訊息已發送",
                     recipient="Line Notify",
-                    status=Status.SUCCESS,
+                    status=constants.STATUS_SUCCESS,
                     retry_count=attempt
                 )
                 return True
@@ -231,15 +231,15 @@ def webhook(type: int, message: str, log_id: Optional[int] = None, max_retries: 
     if type == settings.PUBLISHER_TEAMS:
         typeNam = "Teams"
         url = settings.TEAMS_URL
-        channel = Channel.TEAMS
+        channel = constants.Channel.TEAMS
     elif type == settings.PUBLISHER_SLACK:
         typeNam = "Slack"
         url = settings.SLACK_URL
-        channel = Channel.SLACK
+        channel = constants.Channel.SLACK
     elif type == settings.PUBLISHER_DISCORD:
         typeNam = "Discord"
         url = settings.DISCORD_URL
-        channel = Channel.DISCORD
+        channel = constants.Channel.DISCORD
     else:
         error_msg = f"不支援的 Webhook 類型: {type}"
         logger.warning(error_msg)
@@ -268,7 +268,7 @@ def webhook(type: int, message: str, log_id: Optional[int] = None, max_retries: 
                     log_id=log_id,
                     message=f"{typeNam} 訊息已發送！",
                     recipient=typeNam,
-                    status=Status.SUCCESS,
+                    status=constants.STATUS_SUCCESS,
                     retry_count=attempt
                 )
                 return True
@@ -342,7 +342,7 @@ def sms(phones: List[str], message: str, log_id: Optional[int] = None) -> bool:
             log_id=log_id,
             message=f"簡訊已發送至 {', '.join(phones)}",
             recipient=", ".join(phones),
-            status=Status.SUCCESS if success_count == len(phones) else settings.STATUS_FAILED,
+            status=constants.STATUS_SUCCESS if success_count == len(phones) else constants.STATUS_FAILED,
             error_message=f"部分失敗: {', '.join(failed_phones)}" if failed_phones else None,
             retry_count=0
         )
