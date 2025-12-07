@@ -66,13 +66,15 @@ def logs(
         )
 
         # 判斷是否為重複問題的Log 是就增加次數 否則新增一筆
-        if db.check_log(item):
-            item.count += 1
-            result = db.update_log(item)
+        existing_log = db.check_log(item)
+        if existing_log is not None:
+            # check_log 已返回 Log 物件，直接增加 count 並更新
+            existing_log.count += 1
+            result = db.update_log(existing_log)
             if result is None:
                 raise HTTPException(status_code=500, detail="更新日誌失敗")
-            logger.info(f"日誌已更新: {location}/{function} - 次數: {item.count}")
-            return {"status": "updated", "message": "日誌次數已更新", "count": item.count}
+            logger.info(f"日誌已更新: {location}/{function} - 次數: {existing_log.count}")
+            return {"status": "updated", "message": "日誌次數已更新", "count": existing_log.count}
         else:
             result = db.insert_log(item)
             if result is None:
