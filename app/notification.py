@@ -3,30 +3,46 @@
 負責記錄和管理所有通知的發送歷史
 """
 from pydantic import BaseModel
-from typing import Optional, List
-import datetime
+from typing import Optional
+import logging
+from datetime import datetime
+import app.database as db
+
+
+logger = logging.getLogger(__name__)
 
 
 class NotificationHistory(BaseModel):
     """通知歷史記錄模型"""
     id: Optional[int] = None
     log_id: Optional[int] = None  # 關聯的日誌 ID
-    channel: str  # 通知渠道
     recipient: str  # 接收者（Email、電話號碼等）
-    title: str  # 通知標題
     message: str  # 通知內容
-    status: str  # 發送狀態
+    status: int  # 發送狀態
     error_message: Optional[str] = None  # 錯誤訊息
     retry_count: int = 0  # 重試次數
-    sent_at: Optional[datetime.datetime] = None  # 發送時間
-    created_at: datetime.datetime = None  # 建立時間
+    sent_at: Optional[str] = None  # 發送時間（ISO 格式字串）
+
+
+# 保存通知歷史記錄的輔助函數
+def _save_notification_history(notic_history: NotificationHistory) -> bool:
+    """
+    保存通知歷史記錄到資料庫。
+    返回 True 表示保存成功，False 表示保存失敗（但不影響主流程）
+    """
+    if notic_history.log_id is None:
+        logger.warning("log_id 為 None，無法保存通知歷史")
+        return False
     
-    class Config:
-        json_encoders = {
-            datetime.datetime: lambda v: v.isoformat() if v else None
-        }
+    try:
+        notic_history.sent_at=datetime.now().isoformat()
         
-    def __init__(self, **data):
-        if 'created_at' not in data or data['created_at'] is None:
-            data['created_at'] = datetime.datetime.now()
-        super().__init__(**data)
+        # 排除 id 欄位，讓資料庫自動生成
+        history_data = notic_history.model_dump(exclude={'id'})
+        db.supabase.table("TB_NOTIFICATION_HISTORY").insert(history_data).execute()
+        logger.info(f"通知歷史記錄已保存: {notic_history.message} - {notic_history.status} - 收件者: {notic_history.recipient}")
+        return True
+    except Exception as e:
+        logger.error(f"保存通知歷史記錄失敗: {e}", exc_info=True)
+        # 保存歷史失敗不應該影響主流程，只記錄錯誤
+        return False
