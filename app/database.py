@@ -42,8 +42,10 @@ supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
 # 建立Filter用來查詢特定資料
 def makeFilter(query, filters: list[DBFilter]):
     for f in filters:
-        name, operator, value = f
-        query = query.filter(name, operator, value)
+        # 使用 DBFilter 的屬性，而不是解包元組
+        # 如果 values 只有一個元素，直接使用該值；否則使用整個列表
+        value = f.values[0] if len(f.values) == 1 else f.values
+        query = query.filter(f.name, f.operator, value)
     return query
 
 
@@ -162,7 +164,11 @@ def need_send(log: Log) -> bool:
 # 新增Log資料
 def insert_log(log: Log) -> Optional[Any]:
     try:
-        result = supabase.table("TB_LOGS").insert(log.dict()).execute()
+        # 手動轉換日期和時間為字串
+        log_data = log.model_dump(exclude={'id'})  # 排除 id 欄位，讓資料庫自動生成
+        log_data['date'] = log.date.isoformat()
+        log_data['time'] = log.time.isoformat()
+        result = supabase.table("TB_LOGS").insert(log_data).execute()
         # 如果是緊急等級直接通知相關人員
         if log.riskLevel == 3:
             try:
@@ -183,9 +189,13 @@ def insert_log(log: Log) -> Optional[Any]:
 
 # 更新Log資料
 def update_log(log: Log) -> Optional[Any]:
-    if log.id:
+    if log.id != None:
         try:
-            result = update("TB_LOGS", log.dict(), [DBFilter(name="id", operator=Opreator.EQUAL, values=[str(log.id)])])
+            # 手動轉換日期和時間為字串
+            log_data = log.model_dump()
+            log_data['date'] = log.date.isoformat()
+            log_data['time'] = log.time.isoformat()
+            result = update("TB_LOGS", log_data, [DBFilter(name="id", operator=Opreator.EQUAL, values=[str(log.id)])])
             # 如果超過一定次數通知相關人員(普通等級5次 高風險等級3次 緊急等級1次)
             if need_send(log):
                 try:
@@ -207,7 +217,7 @@ def update_log(log: Log) -> Optional[Any]:
 
 
 # 判斷是否為重複問題的Log
-def check_log(log: Log) -> bool:
+def check_log(log: Log) -> Optional[Log]:
     try:
         # 查詢資料庫中是否有相同log
         filters = [
@@ -216,7 +226,22 @@ def check_log(log: Log) -> bool:
             DBFilter(name="log", operator=Opreator.EQUAL, values=[log.log])
         ]
         response = call_by_filters("TB_LOGS", filters)
-        return True if response and response.data and len(response.data) > 0 else False
+        if response and response.data and len(response.data) > 0:
+            # 將字典轉換為 Log 物件
+            data = response.data[0]
+            return Log(
+                id=data.get('id'),
+                riskLevel=data.get('riskLevel'),
+                type=data.get('type'),
+                location=data.get('location'),
+                function=data.get('function'),
+                log=data.get('log'),
+                employees=data.get('employees', []),
+                date=data.get('date'),
+                time=data.get('time'),
+                count=data.get('count', 1)
+            )
+        return None
     except Exception as e:
         logger.error(f"檢查重複日誌時發生錯誤: {e}", exc_info=True)
-        return False
+        return None
