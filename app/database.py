@@ -148,11 +148,11 @@ def need_send(log: Log) -> bool:
         
         request = (
             supabase.table("TB_LOGS").select("*")
-            .filter("location", Opreator.EQUAL, log.location)
-            .filter("function", Opreator.EQUAL, log.function)
-            .filter("log", Opreator.EQUAL, log.log)
-            .filter("riskLevel", Opreator.EQUAL, log.riskLevel)
-            .filter("count", Opreator.GREATER_OR_EQUAL, threshold)
+            .filter("location", Opreator.EQUAL.value, log.location)
+            .filter("function", Opreator.EQUAL.value, log.function)
+            .filter("log", Opreator.EQUAL.value, log.log)
+            .filter("riskLevel", Opreator.EQUAL.value, log.riskLevel)
+            .filter("count", Opreator.GREATER_OR_EQUAL.value, threshold)
             .execute()
         )
         return True if request.data and len(request.data) > 0 else False
