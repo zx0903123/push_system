@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Optional
 import app.database as db
 from app.object import Log, NotificationHistory
 import logging
-from app.settings import settings
+import app.constants as constants
 
 # 設定日誌
 logging.basicConfig(level=logging.INFO)
@@ -342,7 +342,7 @@ def get_notification_statistics(
             by_channel[channel] = by_channel.get(channel, 0) + 1
             by_status[status] = by_status.get(status, 0) + 1
             
-            if status == settings.Status.SUCCESS.value:
+            if status == constants.Status.SUCCESS.value:
                 success_count += 1
         
         total = len(notifications)
