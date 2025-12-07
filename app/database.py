@@ -43,8 +43,15 @@ supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
 def makeFilter(query, filters: list[DBFilter]):
     for f in filters:
         # 使用 DBFilter 的屬性，而不是解包元組
-        # 如果 values 只有一個元素，直接使用該值；否則使用整個列表
-        value = f.values[0] if len(f.values) == 1 else f.values
+        if f.operator == Opreator.IN.value:
+            # in_ 運算子需要特殊格式：將列表轉換為 "(value1,value2)" 格式
+            value = f"({','.join(f.values)})"
+        elif len(f.values) == 1:
+            # 單一值直接使用
+            value = f.values[0]
+        else:
+            # 多個值使用列表
+            value = f.values
         query = query.filter(f.name, f.operator, value)
     return query
 
