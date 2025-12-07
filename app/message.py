@@ -2,7 +2,7 @@ from app.object import DBFilter, Message
 from app.notification import NotificationHistory
 import app.notification as notification
 import app.database as db
-import app.settings as settings
+from app.settings import settings
 import app.constants as constants
 from typing import List, Optional
 import smtplib
@@ -40,25 +40,25 @@ def send_message(message: Message, log_id: Optional[int] = None):
                     log_id=log_id,
                     message=error_msg,
                     recipient=", ".join(message.employees),
-                    status=settings.STATUS_FAILED,
+                    status=constants.STATUS_FAILED,
                     error_message=error_msg
                 )
             )
             return
 
         for contact in employees_contact.data:
-            if contact.get('contactWay', 0) & settings.PUBLISHER_EMAIL:  # Email
+            if contact.get('contactWay', 0) & constants.PUBLISHER_EMAIL:  # Email
                 if contact.get('email'):
                     emails.append(contact['email'])
-            if contact.get('contactWay', 0) & settings.PUBLISHER_LINE:  # Line
+            if contact.get('contactWay', 0) & constants.PUBLISHER_LINE:  # Line
                 line = True
-            if contact.get('contactWay', 0) & settings.PUBLISHER_TEAMS:  # Teams
+            if contact.get('contactWay', 0) & constants.PUBLISHER_TEAMS:  # Teams
                 team = True
-            if contact.get('contactWay', 0) & settings.PUBLISHER_SLACK:  # Slack
+            if contact.get('contactWay', 0) & constants.PUBLISHER_SLACK:  # Slack
                 slack = True
-            if contact.get('contactWay', 0) & settings.PUBLISHER_DISCORD:  # Discord
+            if contact.get('contactWay', 0) & constants.PUBLISHER_DISCORD:  # Discord
                 discord = True
-            if contact.get('contactWay', 0) & settings.PUBLISHER_SMS:  # SMS
+            if contact.get('contactWay', 0) & constants.PUBLISHER_SMS:  # SMS
                 if contact.get('phone'):
                     phones.append(contact['phone'])
 
@@ -73,13 +73,13 @@ def send_message(message: Message, log_id: Optional[int] = None):
             send_line(message.body, log_id=log_id)
         # 如果有 Teams 通知需求就發送 Teams
         if team:
-            webhook(settings.PUBLISHER_TEAMS, message.body, log_id=log_id)
+            webhook(constants.PUBLISHER_TEAMS, message.body, log_id=log_id)
         # 如果有 Slack 通知需求就發送 Slack
         if slack:
-            webhook(settings.PUBLISHER_SLACK, message.body, log_id=log_id)
+            webhook(constants.PUBLISHER_SLACK, message.body, log_id=log_id)
         # 如果有 Discord 通知需求就發送 Discord
         if discord:
-            webhook(settings.PUBLISHER_DISCORD, message.body, log_id=log_id)
+            webhook(constants.PUBLISHER_DISCORD, message.body, log_id=log_id)
         # 如果有 SMS 通知需求就發送簡訊
         if len(phones) > 0:
             sms(phones, message.body, log_id=log_id)
@@ -91,7 +91,7 @@ def send_message(message: Message, log_id: Optional[int] = None):
         notification._save_notification_history(
             log_id=log_id,
             recipient=", ".join(message.employees) if message.employees else "Unknown",
-            status=settings.STATUS_FAILED,
+            status=constants.STATUS_FAILED,
             error_message=error_msg
         )
 
@@ -158,7 +158,7 @@ def send_email(to: List[str], subject: str, body: str, html: bool = False, attac
         log_id=log_id,
         message=f"Email 發送失敗 (嘗試 {max_retries} 次)",
         recipient=", ".join(to),
-        status=settings.STATUS_FAILED,
+        status=constants.STATUS_FAILED,
         error_message=error_msg,
         retry_count=retry_count
     )
@@ -175,7 +175,7 @@ def send_line(message: str, max_retries: int = 3, log_id: Optional[int] = None) 
             log_id=log_id,
             message=error_msg,
             recipient="Line Notify",
-            status=settings.STATUS_FAILED,
+            status=constants.STATUS_FAILED,
             error_message=error_msg
         )
         return False
@@ -214,7 +214,7 @@ def send_line(message: str, max_retries: int = 3, log_id: Optional[int] = None) 
         log_id=log_id,
         message=f"Email 發送失敗 (嘗試 {max_retries} 次)",
         recipient="Line Notify",
-        status=settings.STATUS_FAILED,
+        status=constants.STATUS_FAILED,
         error_message=error_msg,
         retry_count=max_retries
     )
@@ -228,15 +228,15 @@ def webhook(type: int, message: str, log_id: Optional[int] = None, max_retries: 
     payload = {"text": message}
     
     # 判斷通知渠道和 URL
-    if type == settings.PUBLISHER_TEAMS:
+    if type == constants.PUBLISHER_TEAMS:
         typeNam = "Teams"
         url = settings.TEAMS_URL
         channel = constants.Channel.TEAMS
-    elif type == settings.PUBLISHER_SLACK:
+    elif type == constants.PUBLISHER_SLACK:
         typeNam = "Slack"
         url = settings.SLACK_URL
         channel = constants.Channel.SLACK
-    elif type == settings.PUBLISHER_DISCORD:
+    elif type == constants.PUBLISHER_DISCORD:
         typeNam = "Discord"
         url = settings.DISCORD_URL
         channel = constants.Channel.DISCORD
@@ -252,7 +252,7 @@ def webhook(type: int, message: str, log_id: Optional[int] = None, max_retries: 
             log_id=log_id,
             message=error_msg,
             recipient=typeNam,
-            status=settings.STATUS_FAILED,
+            status=constants.STATUS_FAILED,
             error_message=error_msg
         )
         return False
@@ -289,7 +289,7 @@ def webhook(type: int, message: str, log_id: Optional[int] = None, max_retries: 
         log_id=log_id,
         message=f"{typeNam} 發送失敗 (嘗試 {max_retries} 次)",
         recipient=typeNam,
-        status=settings.STATUS_FAILED,
+        status=constants.STATUS_FAILED,
         error_message=error_msg,
         retry_count=max_retries
     )
@@ -306,7 +306,7 @@ def sms(phones: List[str], message: str, log_id: Optional[int] = None) -> bool:
             log_id=log_id,
             message=error_msg,
             recipient=", ".join(phones),
-            status=settings.STATUS_FAILED,
+            status=constants.STATUS_FAILED,
             error_message=error_msg
         )
         return False
@@ -351,7 +351,7 @@ def sms(phones: List[str], message: str, log_id: Optional[int] = None) -> bool:
             log_id=log_id,
             message=f"簡訊發送失敗至 {', '.join(phones)}",
             recipient=", ".join(phones),
-            status=settings.STATUS_FAILED,
+            status=constants.STATUS_FAILED,
             error_message="所有收件者發送失敗",
             retry_count=0
         )
