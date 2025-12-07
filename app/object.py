@@ -46,3 +46,17 @@ class EmployeeContact(BaseModel):
     slack: Optional[str] = None
     discord: Optional[str] = None
     phone: Optional[str] = None
+
+
+class NotificationHistory(BaseModel):
+    id: int
+    log_id: int
+    channel: int
+    recipient: str
+    title: str
+    message: str
+    status: int
+    error_message: str
+    retry_count: int
+    sent_at: datetime.datetime
+    created_at: datetime.datetime
