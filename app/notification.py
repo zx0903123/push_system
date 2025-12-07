@@ -7,6 +7,8 @@ from typing import Optional
 import logging
 from datetime import datetime
 import app.database as db
+from app.object import DBFilter
+from app.constants import Channel, Status
 
 
 logger = logging.getLogger(__name__)
@@ -28,6 +30,7 @@ class NotificationHistory(BaseModel):
 def _save_notification_history(notic_history: NotificationHistory) -> bool:
     """
     保存通知歷史記錄到資料庫。
+    如果已存在相同的記錄（log_id、recipient、message 相同），則更新 retry_count。
     返回 True 表示保存成功，False 表示保存失敗（但不影響主流程）
     """
     if notic_history.log_id is None:
@@ -35,13 +38,41 @@ def _save_notification_history(notic_history: NotificationHistory) -> bool:
         return False
     
     try:
-        notic_history.sent_at=datetime.now().isoformat()
+        # 檢查是否已存在相同的記錄
+        existing = db.supabase.table("TB_NOTIFICATION_HISTORY").select("*").filter(
+            "log_id", "eq", notic_history.log_id
+        ).filter(
+            "recipient", "eq", notic_history.recipient
+        ).filter(
+            "message", "eq", notic_history.message
+        ).execute()
         
-        # 排除 id 欄位，讓資料庫自動生成
-        history_data = notic_history.model_dump(exclude={'id'})
-        db.supabase.table("TB_NOTIFICATION_HISTORY").insert(history_data).execute()
-        logger.info(f"通知歷史記錄已保存: {notic_history.message} - {notic_history.status} - 收件者: {notic_history.recipient}")
-        return True
+        notic_history.sent_at = datetime.now().isoformat()
+        
+        if existing.data and len(existing.data) > 0:
+            # 找到重複記錄，更新 retry_count
+            existing_record = existing.data[0]
+            existing_record['retry_count'] = existing_record.get('retry_count', 0) + 1
+            
+            # 使用 db.update() 更新記錄
+            result = db.update(
+                "TB_NOTIFICATION_HISTORY", existing_record,
+                [DBFilter(name="id", operator=db.Opreator.EQUAL.value, values=[str(existing_record['id'])])]
+            )
+            
+            if result:
+                logger.info(f"通知歷史記錄已更新: ID={existing_record['id']}, retry_count={existing_record['retry_count']}")
+                return True
+            else:
+                logger.error("更新通知歷史記錄失敗")
+                return False
+        else:
+            # 不存在重複記錄，新增
+            history_data = notic_history.model_dump(exclude={'id'})
+            db.supabase.table("TB_NOTIFICATION_HISTORY").insert(history_data).execute()
+            logger.info(f"通知歷史記錄已保存: {notic_history.message} - {notic_history.status} - 收件者: {notic_history.recipient}")
+            return True
+            
     except Exception as e:
         logger.error(f"保存通知歷史記錄失敗: {e}", exc_info=True)
         # 保存歷史失敗不應該影響主流程，只記錄錯誤
