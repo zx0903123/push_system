@@ -250,16 +250,16 @@ def get_notification_history(
         if status:
             filters.append(db.DBFilter(name="status", operator=db.Opreator.EQUAL, values=[status]))
         if date_from:
-            filters.append(db.DBFilter(name="created_at", operator=db.Opreator.GREATER_OR_EQUAL, values=[str(date_from)]))
+            filters.append(db.DBFilter(name="send_at", operator=db.Opreator.GREATER_OR_EQUAL, values=[str(date_from)]))
         if date_to:
-            filters.append(db.DBFilter(name="created_at", operator=db.Opreator.LESS_OR_EQUAL, values=[str(date_to)]))
+            filters.append(db.DBFilter(name="send_at", operator=db.Opreator.LESS_OR_EQUAL, values=[str(date_to)]))
         
         # 查詢通知歷史
         query = db.supabase.table("TB_NOTIFICATION_HISTORY").select("*")
         for f in filters:
             query = query.filter(f.name, f.operator, f.values[0] if len(f.values) == 1 else f.values)
         
-        query = query.order("created_at", desc=True).range(offset, offset + limit - 1)
+        query = query.order("send_at", desc=True).range(offset, offset + limit - 1)
         result = query.execute()
         
         return {
@@ -311,8 +311,8 @@ def get_notification_statistics(
             date_to = datetime.date.today()
         
         filters = [
-            db.DBFilter(name="created_at", operator=db.Opreator.GREATER_OR_EQUAL, values=[str(date_from)]),
-            db.DBFilter(name="created_at", operator=db.Opreator.LESS_OR_EQUAL, values=[str(date_to)])
+            db.DBFilter(name="send_at", operator=db.Opreator.GREATER_OR_EQUAL, values=[str(date_from)]),
+            db.DBFilter(name="send_at", operator=db.Opreator.LESS_OR_EQUAL, values=[str(date_to)])
         ]
         
         result = db.call_by_filters("TB_NOTIFICATION_HISTORY", filters)
