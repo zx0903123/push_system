@@ -2,9 +2,9 @@ import datetime
 from fastapi import FastAPI, Query, HTTPException, Path
 from typing import List, Dict, Any, Optional
 import app.database as db
-from app.object import Log
-from app.notification import NotificationHistory, NotificationStatus, NotificationChannel
+from app.object import Log, NotificationHistory
 import logging
+from app.settings import settings
 
 # 設定日誌
 logging.basicConfig(level=logging.INFO)
@@ -331,15 +331,16 @@ def get_notification_statistics(
         by_channel = {}
         by_status = {}
         success_count = 0
+        notif = NotificationHistory()
         
         for notif in notifications:
-            channel = notif.get('channel', 'Unknown')
-            status = notif.get('status', 'Unknown')
+            channel = notif.get('channel', 0)
+            status = notif.get('status', 0)
             
             by_channel[channel] = by_channel.get(channel, 0) + 1
             by_status[status] = by_status.get(status, 0) + 1
             
-            if status == NotificationStatus.SUCCESS:
+            if status == settings.Status.SUCCESS.value:
                 success_count += 1
         
         total = len(notifications)
