@@ -1,0 +1,22 @@
+version: '3.9'
+services:
+  app:
+    build: .
+    volumes:
+      - ./:/app
+    ports:
+      - "8000:8000"   # 正常模式
+      - "5678:5678"   # debug 模式
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DEBUG=0
+    command: >
+      sh -c "
+      if [ '$DEBUG' = '1' ]; then
+        python -m debugpy --listen 0.0.0.0:5678 --wait-for-client -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      else
+        uvicorn app.main:app --host 0.0.0.0 --port 8000
+      fi
+      "
