@@ -1,7 +1,9 @@
 from app.object import DBFilter, Message
-from app.notification import NotificationHistory, NotificationChannel, NotificationStatus
+from app.notification import NotificationHistory
+import app.notification as notification
 import app.database as db
 import app.settings as settings
+from app.settings import Channel, Status
 from typing import List, Optional
 import smtplib
 from email.mime.text import MIMEText
@@ -11,39 +13,8 @@ from email import encoders
 import requests
 import logging
 import time
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
-
-
-# 保存通知歷史記錄的輔助函數
-def _save_notification_history(
-    log_id: Optional[int],
-    channel: NotificationChannel,
-    recipient: str,
-    status: NotificationStatus,
-    error_message: Optional[str] = None,
-    retry_count: int = 0
-):
-    """保存通知歷史記錄到資料庫。"""
-    if log_id is None:
-        return
-    
-    try:
-        history = NotificationHistory(
-            log_id=log_id,
-            channel=channel.value,
-            recipient=recipient,
-            status=status.value,
-            error_message=error_message,
-            retry_count=retry_count,
-            sent_at=datetime.now().isoformat()
-        )
-        
-        db.supabase.table("TB_NOTIFICATION_HISTORY").insert(history.dict()).execute()
-        logger.info(f"通知歷史記錄已保存: {channel.value} - {status.value}")
-    except Exception as e:
-        logger.error(f"保存通知歷史記錄失敗: {e}", exc_info=True)
 
 
 # 發送通知
@@ -58,10 +29,21 @@ def send_message(message: Message, log_id: Optional[int] = None):
 
     # 用員工列表取得聯絡方式設定
     try:
-        employees_contact = db.call_by_filters("TB_EMPLOYEE_CONTACT", [DBFilter(name="no", operator=db.OPREATOR_IN, values=message.employees)])
+        employees_contact = db.call_by_filters("TB_EMPLOYEE_CONTACT", [DBFilter(name="no", operator=db.Opreator.IN.value, values=message.employees)])
         
         if not employees_contact or not employees_contact.data:
-            logger.warning(f"找不到員工聯絡資訊: {message.employees}")
+            error_msg = f"找不到員工聯絡資訊: {message.employees}"
+            logger.warning(error_msg)
+            # 記錄查詢員工聯絡資訊失敗
+            notification._save_notification_history(
+                NotificationHistory(
+                    log_id=log_id,
+                    message=error_msg,
+                    recipient=", ".join(message.employees),
+                    status=settings.STATUS_FAILED,
+                    error_message=error_msg
+                )
+            )
             return
 
         for contact in employees_contact.data:
@@ -103,7 +85,15 @@ def send_message(message: Message, log_id: Optional[int] = None):
             sms(phones, message.body, log_id=log_id)
     
     except Exception as e:
-        logger.error(f"發送訊息時發生錯誤: {e}", exc_info=True)
+        error_msg = f"發送訊息時發生錯誤: {e}"
+        logger.error(error_msg, exc_info=True)
+        # 記錄整體發送流程錯誤
+        notification._save_notification_history(
+            log_id=log_id,
+            recipient=", ".join(message.employees) if message.employees else "Unknown",
+            status=settings.STATUS_FAILED,
+            error_message=error_msg
+        )
 
 
 # 發送Email通知
@@ -147,11 +137,11 @@ def send_email(to: List[str], subject: str, body: str, html: bool = False, attac
                 server.sendmail(settings.SENDER_EMAIL, to, message.as_string())
 
             logger.info(f"Email 已發送！收件者: {to}")
-            _save_notification_history(
+            notification._save_notification_history(
                 log_id=log_id,
-                channel=NotificationChannel.EMAIL,
+                message=f"Email 已發送！收件者: {', '.join(to)}",
                 recipient=", ".join(to),
-                status=NotificationStatus.SUCCESS,
+                status=Status.SUCCESS,
                 retry_count=retry_count
             )
             return True
@@ -164,11 +154,11 @@ def send_email(to: List[str], subject: str, body: str, html: bool = False, attac
                 time.sleep(2 ** retry_count)
     
     # 所有重試都失敗
-    _save_notification_history(
+    notification._save_notification_history(
         log_id=log_id,
-        channel=NotificationChannel.EMAIL,
+        message=f"Email 發送失敗 (嘗試 {max_retries} 次)",
         recipient=", ".join(to),
-        status=NotificationStatus.FAILED,
+        status=settings.STATUS_FAILED,
         error_message=error_msg,
         retry_count=retry_count
     )
@@ -181,11 +171,11 @@ def send_line(message: str, max_retries: int = 3, log_id: Optional[int] = None) 
     if not settings.LINE_TOKEN:
         error_msg = "Line Token 未設定，跳過發送"
         logger.warning(error_msg)
-        _save_notification_history(
+        notification._save_notification_history(
             log_id=log_id,
-            channel=NotificationChannel.LINE,
+            message=error_msg,
             recipient="Line Notify",
-            status=NotificationStatus.FAILED,
+            status=settings.STATUS_FAILED,
             error_message=error_msg
         )
         return False
@@ -199,11 +189,11 @@ def send_line(message: str, max_retries: int = 3, log_id: Optional[int] = None) 
             
             if r.status_code == 200:
                 logger.info("Line 訊息已發送")
-                _save_notification_history(
+                notification._save_notification_history(
                     log_id=log_id,
-                    channel=NotificationChannel.LINE,
+                    message="Line 訊息已發送",
                     recipient="Line Notify",
-                    status=NotificationStatus.SUCCESS,
+                    status=Status.SUCCESS,
                     retry_count=attempt
                 )
                 return True
@@ -220,11 +210,11 @@ def send_line(message: str, max_retries: int = 3, log_id: Optional[int] = None) 
                 time.sleep(2 ** attempt)
     
     # 所有重試都失敗
-    _save_notification_history(
+    notification._save_notification_history(
         log_id=log_id,
-        channel=NotificationChannel.LINE,
+        message=f"Email 發送失敗 (嘗試 {max_retries} 次)",
         recipient="Line Notify",
-        status=NotificationStatus.FAILED,
+        status=settings.STATUS_FAILED,
         error_message=error_msg,
         retry_count=max_retries
     )
@@ -241,15 +231,15 @@ def webhook(type: int, message: str, log_id: Optional[int] = None, max_retries: 
     if type == settings.PUBLISHER_TEAMS:
         typeNam = "Teams"
         url = settings.TEAMS_URL
-        channel = NotificationChannel.TEAMS
+        channel = Channel.TEAMS
     elif type == settings.PUBLISHER_SLACK:
         typeNam = "Slack"
         url = settings.SLACK_URL
-        channel = NotificationChannel.SLACK
+        channel = Channel.SLACK
     elif type == settings.PUBLISHER_DISCORD:
         typeNam = "Discord"
         url = settings.DISCORD_URL
-        channel = NotificationChannel.DISCORD
+        channel = Channel.DISCORD
     else:
         error_msg = f"不支援的 Webhook 類型: {type}"
         logger.warning(error_msg)
@@ -258,11 +248,11 @@ def webhook(type: int, message: str, log_id: Optional[int] = None, max_retries: 
     if not url:
         error_msg = f"{typeNam} URL 未設定，跳過發送"
         logger.warning(error_msg)
-        _save_notification_history(
+        notification._save_notification_history(
             log_id=log_id,
-            channel=channel,
+            message=error_msg,
             recipient=typeNam,
-            status=NotificationStatus.FAILED,
+            status=settings.STATUS_FAILED,
             error_message=error_msg
         )
         return False
@@ -274,11 +264,11 @@ def webhook(type: int, message: str, log_id: Optional[int] = None, max_retries: 
             
             if r.status_code in [200, 204]:
                 logger.info(f"{typeNam} 訊息已發送！")
-                _save_notification_history(
+                notification._save_notification_history(
                     log_id=log_id,
-                    channel=channel,
+                    message=f"{typeNam} 訊息已發送！",
                     recipient=typeNam,
-                    status=NotificationStatus.SUCCESS,
+                    status=Status.SUCCESS,
                     retry_count=attempt
                 )
                 return True
@@ -295,11 +285,11 @@ def webhook(type: int, message: str, log_id: Optional[int] = None, max_retries: 
                 time.sleep(2 ** attempt)
     
     # 所有重試都失敗
-    _save_notification_history(
+    notification._save_notification_history(
         log_id=log_id,
-        channel=channel,
+        message=f"{typeNam} 發送失敗 (嘗試 {max_retries} 次)",
         recipient=typeNam,
-        status=NotificationStatus.FAILED,
+        status=settings.STATUS_FAILED,
         error_message=error_msg,
         retry_count=max_retries
     )
@@ -312,11 +302,11 @@ def sms(phones: List[str], message: str, log_id: Optional[int] = None) -> bool:
     if not settings.EMAIL_TO_SMS_GATEWAY:
         error_msg = "SMS Gateway 未設定，跳過發送"
         logger.warning(error_msg)
-        _save_notification_history(
+        notification._save_notification_history(
             log_id=log_id,
-            channel=NotificationChannel.SMS,
+            message=error_msg,
             recipient=", ".join(phones),
-            status=NotificationStatus.FAILED,
+            status=settings.STATUS_FAILED,
             error_message=error_msg
         )
         return False
@@ -348,20 +338,20 @@ def sms(phones: List[str], message: str, log_id: Optional[int] = None) -> bool:
     
     # 記錄通知歷史
     if success_count > 0:
-        _save_notification_history(
+        notification._save_notification_history(
             log_id=log_id,
-            channel=NotificationChannel.SMS,
+            message=f"簡訊已發送至 {', '.join(phones)}",
             recipient=", ".join(phones),
-            status=NotificationStatus.SUCCESS if success_count == len(phones) else NotificationStatus.FAILED,
+            status=Status.SUCCESS if success_count == len(phones) else settings.STATUS_FAILED,
             error_message=f"部分失敗: {', '.join(failed_phones)}" if failed_phones else None,
             retry_count=0
         )
     else:
-        _save_notification_history(
+        notification._save_notification_history(
             log_id=log_id,
-            channel=NotificationChannel.SMS,
+            message=f"簡訊發送失敗至 {', '.join(phones)}",
             recipient=", ".join(phones),
-            status=NotificationStatus.FAILED,
+            status=settings.STATUS_FAILED,
             error_message="所有收件者發送失敗",
             retry_count=0
         )
