@@ -72,7 +72,6 @@ GET /notifications/history?date_from=2024-12-01&date_to=2024-12-07&limit=100
       "error_message": null,
       "retry_count": 0,
       "sent_at": "2024-12-07T14:30:00",
-      "created_at": "2024-12-07T14:29:55"
     }
   ],
   "count": 1,
@@ -104,7 +103,6 @@ GET /notifications/history/123
     "error_message": null,
     "retry_count": 1,
     "sent_at": "2024-12-07T14:30:00",
-    "created_at": "2024-12-07T14:29:55"
   }
 }
 ```
@@ -159,22 +157,17 @@ GET /notifications/statistics?date_from=2024-12-01&date_to=2024-12-07
 CREATE TABLE TB_NOTIFICATION_HISTORY (
     id SERIAL PRIMARY KEY,
     log_id INTEGER REFERENCES TB_LOGS(id),
-    channel VARCHAR(20) NOT NULL,
     recipient VARCHAR(255) NOT NULL,
-    title VARCHAR(255) NOT NULL,
     message TEXT NOT NULL,
     status VARCHAR(20) NOT NULL,
     error_message TEXT,
     retry_count INTEGER DEFAULT 0,
     sent_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 建立索引提升查詢效能
 CREATE INDEX idx_notification_log_id ON TB_NOTIFICATION_HISTORY(log_id);
-CREATE INDEX idx_notification_channel ON TB_NOTIFICATION_HISTORY(channel);
 CREATE INDEX idx_notification_status ON TB_NOTIFICATION_HISTORY(status);
-CREATE INDEX idx_notification_created_at ON TB_NOTIFICATION_HISTORY(created_at);
 ```
 
 ## 🔍 使用場景
