@@ -38,30 +38,39 @@ def _save_notification_history(notic_history: NotificationHistory) -> bool:
         return False
     
     try:
-        # 檢查是否已存在相同的記錄
-        existing = db.supabase.table("TB_NOTIFICATION_HISTORY").select("*").filter(
-            "log_id", "eq", notic_history.log_id
-        ).filter(
-            "recipient", "eq", notic_history.recipient
-        ).filter(
-            "message", "eq", notic_history.message
-        ).execute()
-        
         notic_history.sent_at = datetime.now().isoformat()
         
+        # 檢查是否已存在相同的記錄（log_id + recipient + message 三者組合）
+        existing = db.supabase.table("TB_NOTIFICATION_HISTORY").select("*").eq(
+            "log_id", notic_history.log_id
+        ).eq(
+            "recipient", notic_history.recipient
+        ).eq(
+            "message", notic_history.message
+        ).execute()
+        
         if existing.data and len(existing.data) > 0:
-            # 找到重複記錄，更新 retry_count
+            # 找到重複記錄，更新 retry_count 和其他欄位
             existing_record = existing.data[0]
-            existing_record['retry_count'] = existing_record.get('retry_count', 0) + 1
+            new_retry_count = existing_record.get('retry_count', 0) + 1
+            
+            # 準備更新資料
+            update_data = {
+                'retry_count': new_retry_count,
+                'status': notic_history.status,
+                'error_message': notic_history.error_message,
+                'sent_at': notic_history.sent_at
+            }
             
             # 使用 db.update() 更新記錄
             result = db.update(
-                "TB_NOTIFICATION_HISTORY", existing_record,
+                "TB_NOTIFICATION_HISTORY", 
+                {**existing_record, **update_data},
                 [DBFilter(name="id", operator=db.Opreator.EQUAL.value, values=[str(existing_record['id'])])]
             )
             
             if result:
-                logger.info(f"通知歷史記錄已更新: ID={existing_record['id']}, retry_count={existing_record['retry_count']}")
+                logger.info(f"通知歷史記錄已更新: ID={existing_record['id']}, retry_count={new_retry_count}")
                 return True
             else:
                 logger.error("更新通知歷史記錄失敗")
